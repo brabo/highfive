@@ -24,12 +24,12 @@
 #include <stdarg.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <time.h>
 #include <netdb.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <curl/curl.h>
 #include <libpq-fe.h>
 #include "scrape.h"
 #include "bencode.h"

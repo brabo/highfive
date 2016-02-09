@@ -8,7 +8,7 @@ SCRAPE_OBJ=src/scrape.o
 BEN_OBJ=src/bencode.o
 
 LDFLAGS=-L/usr/local/lib -L/usr/lib/x86_64-linux-gnu
-LDLIBS=-lcurl -lpthread -ldl -lpq
+LDLIBS=-lpthread -ldl -lpq
 
 
 scrape: $(SCRAPE_OBJ) $(BEN_OBJ)
