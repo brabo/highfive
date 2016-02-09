@@ -1,0 +1,5 @@
+HIGH FIVE - BitTorrent Utils
+
+
+scrape:		Full scrape a HTTP BT tracker, put info hashes in a db.
+		./scrape -u http://tracker.whatever.com:80/announce -l test.log -v
