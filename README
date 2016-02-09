@@ -3,8 +3,9 @@ HIGH FIVE - BitTorrent Utils
 
 scrape:		Full scrape a HTTP BT tracker, put info hashes in a db.
 
-	To get the database going, ensure you have a working postgresql 9.5 installation.
-	Next, as postgres user:
+	Dependencies: libpq-dev postgresql-9.5
+
+	To get the database going, as postgres user:
 
 	$ createdb hf01
 	$ psql -d hf01 -a -f hf001.sql
@@ -13,16 +14,21 @@ scrape:		Full scrape a HTTP BT tracker, put info hashes in a db.
 	psql (9.5.0)
 	Type "help" for help.
 
-	hf05=# alter user me with password 'mypass';
-	hf05=# GRANT ALL PRIVILEGES ON TABLE hashes to me;
-	hf05=# GRANT ALL PRIVILEGES ON TABLE hashes_id_seq to me;
+	hf01=# alter user me with password 'mypass';
+	hf01=# GRANT ALL PRIVILEGES ON TABLE hashes to me;
+	hf01=# GRANT ALL PRIVILEGES ON TABLE hashes_id_seq to me;
 
 	DONE!
 
-	Do not forget to change this line:
-	const char *conninfo = "user=me password=mypass dbname=hf-whatever sslmode=disable";
+	now create a file ~/.pgpass containing:
+	*:*:*:me:mypass
 
+	$ chmod 0600 ~/.pgpass
 
 	To run it now, first 'make all', then:
 
-	./scrape -u http://tracker.whatever.com:80/announce -l test.log -v
+	./scrape -t http://my.tracker.com:80/ -d hf01 -l test.log -v
+
+	or display help:
+
+	./scrape -h

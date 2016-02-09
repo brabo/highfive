@@ -1,11 +1,12 @@
 /*
- * High Five - BitTorrent Tracker Scrape implementation
+ * High Five - BitTorrent Utils - Tracker Scrape Implementation
  *
  * Author: brabo
  *
  * TODO:	further minimize globals?
  *		examine to optimize code
- *
+ *		unhardcode pg infos
+ *		examine tracker response. are we allowed full scrape? handle better!!!
  *
  * ----------------------------------------------------------------------------
  * "THE BEER-WARE LICENSE" (Revision 42):
@@ -14,6 +15,7 @@
  * this stuff is worth it, you can buy me a beer in return.               brabo
  * ----------------------------------------------------------------------------
  */
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,8 +26,8 @@
 #include <stdarg.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <time.h>
 #include <netdb.h>
+#include <time.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -101,6 +103,38 @@ void hf_quit(int sig)
 	log_close();
 
 	exit(sig);
+}
+
+
+/* Function: print_banner
+ * ----------------------
+ *  Print banner to stdout.
+ */
+void print_banner(void)
+{
+	printf("\n/-----------------------------------/");
+	printf("\n/                                   /");
+	printf("\n/            High Five!             /");
+	printf("\n/     ...scraper starting up...     /");
+	printf("\n/                                   /");
+	printf("\n/-----------------------------------/\n\n");
+}
+
+/* Function: print_help
+ * --------------------
+ *  Print help to stdout.
+ *
+ *  *name:		Pointer to our own name.
+ */
+void print_help(char *name)
+{
+	printf("Usage: %s -[hv] -t tracker -d dbname [-l logfile]\n"
+			"  -h\tThis help\n"
+			"  -v\tIncrease verbosity\n"
+			"  -t\tTracker URL (http://my.tracker.com:80/)\n"
+			"  -d\tPostgresql DB name\n"
+			"  -l\tSpecify a log file (default stdout)\n\n",
+			name);
 }
 
 
@@ -534,23 +568,29 @@ int recv_scrape_get(struct tracker *tracker)
  *  Returns:		SUCCESS on success
  *
  */
-int parse_opts(int argc, char *argv[], struct tracker *tracker)
+int parse_opts(int argc, char *argv[], struct tracker *tracker, char *dbname)
 {
 	char c;
 	char *url = NULL;
+	char *db = NULL;
 
-	while ((c = getopt (argc, argv, "hvu:l:")) != -1) {
+	while ((c = getopt (argc, argv, "hvt:l:d:")) != -1) {
 		switch (c) {
 			case 'h':
-				//help(argv[0]);
-				return 0;
+				print_help(argv[0]);
+				return OPTS_FAIL;
 			case 'v':
 				verbose = 1;
 
 				break;
-			case 'u':
+			case 't':
 				url = malloc(sizeof(char)*(strlen(optarg) + 1));
 				memcpy(url, optarg, strlen(optarg));
+
+				break;
+			case 'd':
+				db = malloc(sizeof(char)*(strlen(optarg) + 1));
+				memcpy(db, optarg, strlen(optarg));
 
 				break;
 			case 'l':
@@ -558,7 +598,7 @@ int parse_opts(int argc, char *argv[], struct tracker *tracker)
 
 				if (!logs) {
 					perror(optarg);
-					return 1;
+					return OPTS_FAIL;
 				}
 				setbuf(logs, NULL);
 
@@ -568,16 +608,24 @@ int parse_opts(int argc, char *argv[], struct tracker *tracker)
 					"Unknown option: %c\n",
 					optopt);
 
-				return 1;
+				return OPTS_FAIL;
 			default:
 				abort();
 		}
 	}
 
 	if (!url) {
-		printf("Error : No URL given!\n");
+		printf("Error : No Tracker given!\n");
 		return OPTS_FAIL;
 	}
+
+	if (!db) {
+		printf("Error : No DB name given!\n");
+		return OPTS_FAIL;
+	}
+
+	memcpy(dbname, db, strlen(db));
+	free(db);
 
 	char *ptr = url;
 	tracker->host = malloc(sizeof(char)*(strlen(url)));
@@ -657,21 +705,24 @@ int scrape_tracker(struct tracker *tracker)
  */
 int main(int argc, char *argv[])
 {
+	print_banner();
 	// setup proper exit shit
 	signal(SIGINT, hf_quit);
 	signal(SIGTERM, hf_quit);
 
 	struct tracker *tracker = malloc(sizeof(struct tracker));
+	char *dbname = malloc(sizeof(char) * 64);
 	int info_cunt =0;
 
 	logs = stdout;
 	verbose = 0;
 
-	if(parse_opts(argc, argv, tracker)) {
+	if(parse_opts(argc, argv, tracker, dbname)) {
 		exit(OPTS_FAIL);
 	}
 
-	const char *conninfo = "user=me password=mypass dbname=hf-whatever sslmode=disable";
+	char *conninfo = malloc((sizeof(char) * strlen(dbname)) + 24);
+	sprintf(conninfo, "dbname=%s sslmode=disable", dbname);
 	conn = PQconnectdb(conninfo);
 
 	if (PQstatus(conn) != CONNECTION_OK) {
@@ -692,6 +743,7 @@ int main(int argc, char *argv[])
 
 	PQfinish(conn);
 	log_close();
+	free(dbname);
 
 	// if you're happy and you know it,
 	exit(SUCCESS);
