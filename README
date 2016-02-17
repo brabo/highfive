@@ -32,3 +32,8 @@ scrape:		Full scrape a HTTP BT tracker, put info hashes in a db.
 	or display help:
 
 	./scrape -h
+
+five0:		BT Listener
+	To run it, after 'make all' of course:
+
+	./five0 -i LI.ST.EN.IP -p listenport
