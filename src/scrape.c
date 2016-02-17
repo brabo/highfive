@@ -386,45 +386,49 @@ int read_scrape(struct scrape_ctx *scrape_ctx, char *buf, int len)
 {
 	while ( len > 0) {
 		if ((scrape_ctx->state == HTTP_WAIT)) {
-			if (!strncmp(buf, "HTTP/1.0 200 OK\r\n", 17)) {
+			if ((!strncmp(buf, "HTTP/1.0 200 OK\r\n", 17)) || (!strncmp(buf, "HTTP/1.1 200 OK\r\n", 17))) {
 				hf_log('D', "SCRAPE :  HTTP OK!");
+				scrape_ctx->state = HTTP_START;
+				buf += 17;
+				len -= 17;
 			}
-
-			scrape_ctx->state = HTTP_START;
-			buf += 17;
-			len -= 17;
 
 			hf_log('D', "SCRAPE :  %d remaining bytes.", len);
 
-			for (int i = 0; i < len; i++) {
-				if (scrape_ctx->state == HTTP_RECV) {
-					break;
-				}
-
-				if (!strncmp(buf, "Content-Length: ", 16)) {
-					char con_len[32];
-					buf += 16;
-					i += 16;
-					len -= 16;
-					int j = 0;
-					while (strncmp(buf, "\r\n", 2)) {
-						con_len[j++] = (uint8_t)*buf++;
+			int tmplen = len;
+			if (scrape_ctx->state == HTTP_START) {
+				for (int i = 0; i < tmplen; i++) {
+					if (scrape_ctx->state == HTTP_RECV) {
+						break;
 					}
-					buf;
-					len -= j;
-					i += j;
-					scrape_ctx->len = strtol(con_len, NULL, 0);
-					hf_log('D', "SCRAPE :  Content-Length :  %d.", scrape_ctx->len);
-					bugger = malloc(sizeof(char) * scrape_ctx->len);
-				} else if (!strncmp(buf, "\r\n\r\n", 4)) {
-					buf += 4;
-					len -= 4;
-					i += 4;
-					scrape_ctx->state = HTTP_RECV;
-				} else {
-					//fallback, we up the pointer
-					buf++;
-					len--;
+
+					if (!strncmp(buf, "Content-Length: ", 16)) {
+						char con_len[32];
+						buf += 16;
+						i += 16;
+						len -= 16;
+						int j = 0;
+						while (strncmp(buf, "\r\n", 2)) {
+							con_len[j++] = (uint8_t)*buf++;
+						}
+						buf;
+						len -= j;
+						i += j;
+						scrape_ctx->len = strtol(con_len, NULL, 0);
+						hf_log('D', "SCRAPE :  Content-Length :  %d.", scrape_ctx->len);
+						bugger = malloc(sizeof(char) * scrape_ctx->len);
+					} else if (!strncmp(buf, "\r\n\r\n", 4)) {
+						buf += 4;
+						len -= 4;
+						i += 4;
+						scrape_ctx->state = HTTP_RECV;
+						hf_log('D', "SCRAPE :  HTTP RECV!");
+					} else {
+						//fallback, we up the pointer
+						buf++;
+						len--;
+						hf_log('D', "SCRAPE :  LEN down to %d", len);
+					}
 				}
 			}
 			continue;
@@ -440,7 +444,7 @@ int read_scrape(struct scrape_ctx *scrape_ctx, char *buf, int len)
 			if (scrape_ctx->cunt == scrape_ctx->len) {
 				bugger -= scrape_ctx->len;
 				printf("\n\n----LOGFILE----\n\n");
-				hf_log('D', "SCRAPE :  Wrote data to file test01");
+				hf_log('D', "SCRAPE :  We have the scrape reply..");
 				return SUCCESS;
 			}
 			continue;
@@ -472,16 +476,22 @@ int process_scrape(int scrape_len)
 	long long *max = malloc(sizeof(long long));
 	*max = scrape_len + 10;
 
+	char *bugger2;
+	bugger2 = bugger;
 	node = _be_decode((const char **)&bugger, max);
 
 	//if (verbose) {
 	//	be_dump(node);
 	//}
 	info->files = 0;
-
+	info->cunt = 0;
 	ret = parse_scrape(node, info);
 
 	free(info);
+	free(max);
+	be_free(node);
+	free(bugger2);
+
 
 	return ret;
 
@@ -508,6 +518,7 @@ int send_scrape_get(struct tracker *tracker)
 		return DEFAULT_FAIL;
 	}
 
+	//free(buf);
 	return SUCCESS;
 }
 
@@ -552,6 +563,7 @@ int recv_scrape_get(struct tracker *tracker)
 	}
 
 	free(buf);
+	free(scrape_ctx);
 
 	return ret;
 }
@@ -674,16 +686,19 @@ int parse_opts(int argc, char *argv[], struct tracker *tracker, char *dbname)
  */
 int scrape_tracker(struct tracker *tracker)
 {
-	tracker->socket = init_con(tracker->host, tracker->port);
-
-	send_scrape_get(tracker);
 	int ret = DEFAULT_FAIL;
+	tracker->socket = 0;
+	if(tracker->socket = init_con(tracker->host, tracker->port)) {
 
-	while (1) {
-		hf_log('D', "SCRAPE :  Trying to receive scrape GET reply");
+		send_scrape_get(tracker);
 
-		if ((ret = recv_scrape_get(tracker)) != DEFAULT_FAIL) {
-			break;
+
+		while (1) {
+			hf_log('D', "SCRAPE :  Trying to receive scrape GET reply");
+
+			if ((ret = recv_scrape_get(tracker)) != DEFAULT_FAIL) {
+				break;
+			}
 		}
 	}
 
@@ -737,8 +752,9 @@ int main(int argc, char *argv[])
 
 		if (info_cunt) {
 			hf_log('I', "SCRAPE :  Upserted %d info hashes into our db!", info_cunt);
-			break;
+			//break;
 		}
+		sleep(2400);
 	}
 
 	PQfinish(conn);
